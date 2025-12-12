@@ -1,0 +1,126 @@
+/* Summernote Dropdown Overlap Fix */
+/* File ini mengatasi masalah dropdown yang tumpang tindih */
+
+/* Hide all dropdowns by default */
+.note-editor .note-toolbar .dropdown-menu,
+.note-editor .note-toolbar .note-color-palette,
+.note-editor .note-toolbar .note-table,
+.note-editor .note-toolbar .note-popover {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Show only when explicitly opened */
+.note-editor .note-toolbar .btn-group.open .dropdown-menu {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 1050 !important;
+}
+
+.note-editor .note-toolbar .note-color-palette.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 1051 !important;
+}
+
+.note-editor .note-toolbar .note-table.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 1052 !important;
+}
+
+.note-editor .note-toolbar .note-popover.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 1053 !important;
+}
+
+/* Ensure proper positioning */
+.note-editor .note-toolbar .dropdown-menu {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    min-width: 160px !important;
+}
+
+.note-editor .note-toolbar .note-color-palette {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    min-width: 200px !important;
+}
+
+.note-editor .note-toolbar .note-table {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    min-width: 150px !important;
+}
+
+.note-editor .note-toolbar .note-popover {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    min-width: 200px !important;
+}
+
+/* Fix for modal z-index */
+.modal.show .note-editor .note-toolbar .dropdown-menu {
+    z-index: 1056 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-color-palette {
+    z-index: 1057 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-table {
+    z-index: 1058 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-popover {
+    z-index: 1059 !important;
+}
+
+/* Ensure buttons are clickable */
+.note-editor .note-toolbar .btn {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 1002 !important;
+}
+
+.note-editor .note-toolbar .btn-group {
+    position: relative !important;
+    z-index: 1001 !important;
+}
+
+/* Fix dropdown items */
+.note-editor .note-toolbar .dropdown-menu .dropdown-item {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .note-color-palette .note-color-btn {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .note-table .note-table-btn {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .note-popover .btn {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}

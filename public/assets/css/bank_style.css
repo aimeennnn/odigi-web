@@ -1,0 +1,270 @@
+/* ====== CSS dari resources/views/bank/index.blade.php ====== */
+.gradient-header-bank {
+    background: linear-gradient(90deg, #1dd1a1 0%, #49bbca 100%);
+    border-radius: 18px;
+    min-height: 120px;
+    position: relative;
+}
+.gradient-header-bank h2 { color: #fff; font-weight: bold; }
+.gradient-header-bank .desc { color: #e3f0ff; font-size: 1.1rem; }
+.gradient-header-bank .icon { position: absolute; top: 16px; right: 32px; font-size: 4rem; color: #fff; opacity: 0.18; }
+/* Table styling like SLIK */
+.table td, .table th {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.table thead {
+    background: #e6faf6;
+}
+.table th {
+    color: #162447;
+    font-weight: bold;
+    text-align: center;
+    border-color: #dee2e6;
+}
+.table td {
+    text-align: center;
+    border-color: #dee2e6;
+}
+.btn-bank { background: #49bbca; color: #fff; font-weight: 600; }
+.btn-bank-yellow { background: #ffc166; color: #fff; font-weight: 600; }
+.btn-bank-danger { background: #FF8B7B; color: #fff; font-weight: 600; }
+.btn-bank-blue {background: #4F8CFF; color: white; font-weight: 600;}
+/* Auto Caps Search Styling */
+#searchBank {
+  transition: all 0.3s ease;
+}
+#searchBank:focus {
+  border-color: #1dd1a1;
+  box-shadow: 0 0 0 0.2rem rgba(29, 209, 161, 0.25);
+}
+#searchBank::placeholder {
+  text-transform: uppercase;
+}
+/* Pagination Styling */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+.pagination .page-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  background: #fff;
+  color: #495057;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: 400;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+.pagination .page-link:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  color: #495057;
+}
+.pagination .page-item.active .page-link {
+  background: #007bff;
+  border-color: #007bff;
+  color: #fff;
+  font-weight: 500;
+}
+.pagination .page-item.disabled .page-link {
+  background: #fff;
+  border-color: #dee2e6;
+  color: #6c757d;
+  cursor: not-allowed;
+}
+.pagination .page-item.disabled .page-link:hover {
+  background: #fff;
+  border-color: #dee2e6;
+  color: #6c757d;
+}
+/* Pagination Info */
+.pagination-info {
+  color: #666;
+  font-size: 14px;
+}
+.entries-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.entries-selector select {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+.pagination-container {
+  display: flex;
+  justify-content: center;
+}
+/* Action buttons same as SLIK */
+.action-icon { 
+    display:inline-flex; 
+    align-items:center; 
+    justify-content:center; 
+    padding:10px 14px; 
+    min-width:42px; 
+    min-height:40px; 
+    border-radius:12px; 
+    border:2px solid transparent; 
+    background:#fff; 
+    color:#6c757d; 
+    text-decoration:none; 
+    transition:transform .2s, box-shadow .2s, background-color .2s, color .2s, border-color .2s; 
+    cursor:pointer; 
+    font-size:1.05rem; 
+    box-shadow:0 1px 2px rgba(0,0,0,0.04); 
+}
+.action-icon:hover { 
+    transform: translateY(-2px); 
+    box-shadow:0 6px 16px rgba(0,0,0,0.12); 
+    text-decoration:none; 
+}
+.view-icon { background:#eef5ff; color:#2f78ff; border-color:#cfe2ff; }
+.view-icon:hover { background:#2f78ff; color:#fff; border-color:#2f78ff; }
+.delete-icon { background:#fff0f1; color:#dc3545; border-color:#ffd6da; }
+.delete-icon:hover { background:#dc3545; color:#fff; border-color:#dc3545; }
+/* File display styling like SLIK */
+.file-result {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    transition: all 0.3s ease;
+}
+.file-result:hover {
+    background: #e6faf6;
+    border-color: #49bbca;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(73, 187, 202, 0.15);
+}
+.file-icon {
+    font-size: 1.2rem;
+    margin-right: 6px;
+}
+.file-size {
+    font-size: 0.75rem;
+    color: #6c757d;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+/* File display styling like Data */
+.file-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 2px 0;
+    transition: all 0.2s ease;
+}
+.file-item:hover {
+    background: #e6faf6;
+    border-color: #49bbca;
+}
+
+/* ====== CSS dari resources/views/bank/edit.blade.php ====== */
+.upload-dropzone {
+  border: 2px dashed #b2e0f7;
+  background: #f8fbff;
+  border-radius: 16px;
+  padding: 32px 16px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.upload-dropzone.dragover {
+  border-color: #49bbca;
+  background: #e6faf6;
+}
+.dz-icon {
+  font-size: 2rem;
+  color: #49bbca;
+  margin-bottom: 8px;
+}
+.fw-semibold { font-weight: 600; color: #162447; }
+.upload-helper a { color: #49bbca; text-decoration: underline; cursor: pointer; }
+
+/* ====== CSS dari resources/views/bank/show.blade.php ====== */
+.section-card { border-radius: 18px; }
+.section-head { background: linear-gradient(90deg, #1dd1a1 0%, #49bbca 100%); border-radius: 18px 18px 0 0; color:#fff; }
+.section-head h5 { color:#fff !important; }
+.avatar-circle { width:70px; height:70px; border-radius:50%; background: linear-gradient(135deg,#1dd1a1,#49bbca); color:#fff; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 2px 8px rgba(79,140,255,0.15); }
+.info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 768px) { .info-row { grid-template-columns: 1fr; } }
+.info-item { background:#fff; border:1px solid #eef2f7; border-radius:12px; padding:14px 16px; }
+.info-label { color:#6c757d; font-size:.85rem; margin-bottom:4px; }
+.info-value { font-weight:600; color:#162447; }
+.empty-drop { border:2px dashed #cfe2ff; background:#f7fbff; border-radius:14px; padding:28px; text-align:center; }
+.empty-drop .ico { font-size:2.25rem; color:#8fb3ff; }
+.file-card { border-radius:14px; border:1px solid #eef2f7; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.file-title { font-weight:600; }
+.thumb-wrapper { margin-bottom: 10px; }
+.file-thumb { width:100%; height:160px; object-fit:cover; border-radius:10px; border:1px solid #eef2f7; background:#f8fafc; pointer-events:none; }
+.thumb-placeholder { height:160px; border-radius:10px; border:1px dashed #cfe2ff; background:#f7fbff; display:flex; align-items:center; justify-content:center; color:#8fb3ff; }
+
+/* ====== CSS dari modal dokumen di index.blade.php ====== */
+.info-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+}
+.info-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+.info-value {
+    font-size: 1rem;
+    color: #212529;
+    font-weight: 500;
+}
+.modal-xl {
+    max-width: 1200px;
+}
+
+/* ====== RESPONSIVE DESIGN FOR TABLET AND MOBILE ====== */
+@media (max-width: 991px) {
+    /* Filter form - make columns stack on tablet */
+    .row.align-items-end.g-3 > .col-md-9,
+    .row.align-items-end.g-3 > .col-md-3 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    /* Buttons in filter form - stack vertically */
+    .col-md-3.d-flex.gap-2 {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+    }
+    .col-md-3.d-flex.gap-2 .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Button groups - stack vertically on mobile */
+    .d-flex.gap-2.justify-content-end,
+    .d-flex.gap-2 {
+        flex-direction: column;
+    }
+    .d-flex.gap-2 .btn {
+        width: 100%;
+    }
+}

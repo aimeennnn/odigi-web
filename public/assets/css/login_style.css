@@ -1,0 +1,25 @@
+/* ====== CSS DIPINDAHKAN DARI resources/views/login.blade.php (baris 6-31) ====== */
+@keyframes logoBounce {
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+    }
+    25% {
+        transform: translateY(-5px) scale(1.02);
+    }
+    50% {
+        transform: translateY(-10px) scale(1.05);
+    }
+    75% {
+        transform: translateY(-5px) scale(1.02);
+    }
+}
+
+.logo-animated {
+    animation: logoBounce 2s ease-in-out infinite;
+    transition: transform 0.3s ease;
+}
+
+.logo-animated:hover {
+    animation-play-state: paused;
+    transform: scale(1.2) rotate(5deg);
+}

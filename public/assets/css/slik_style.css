@@ -1,0 +1,75 @@
+/* ====== CSS dari resources/views/slik/index.blade.php ====== */
+.gradient-header-slik {
+  background: linear-gradient(90deg, #1dd1a1 0%, #49bbca 100%);
+  border-radius: 18px;
+  min-height: 120px;
+  position: relative;
+}
+.table td, .table th {
+  white-space: nowrap;
+  vertical-align: middle;
+  text-align: center;
+}
+.table .text-primary:hover i { color: #4F8CFF; filter: brightness(0.8); }
+.table .text-danger:hover i { color: #dc3545; filter: brightness(0.8); }
+.btn-slik-danger { background: #FF8B7B; color: #fff; font-weight: 600; }
+.btn-slik-yellow { background: #ffc166; color: #fff; font-weight: 600; }
+.btn-slik { background: #49bbca; color: #fff; font-weight: 600; }
+.btn-slik-blue {background: #4F8CFF; color: white; font-weight: 600;}
+#filter_nama, #filter_no_identitas, #searchSlik { transition: all 0.3s ease; }
+#filter_nama:focus, #filter_no_identitas:focus, #searchSlik:focus { border-color: #1dd1a1; box-shadow: 0 0 0 0.2rem rgba(29, 209, 161, 0.25); }
+#filter_nama::placeholder, #filter_no_identitas::placeholder, #searchSlik::placeholder { text-transform: uppercase; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 4px; margin: 0; padding: 0; }
+.pagination .page-link { display: flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; padding: 6px 12px; border: 1px solid #dee2e6; background: #fff; color: #495057; text-decoration: none; border-radius: 4px; font-weight: 400; font-size: 14px; transition: all 0.15s ease; }
+.pagination .page-link:hover { background: #e9ecef; border-color: #adb5bd; color: #495057; }
+.pagination .page-item.active .page-link { background: #007bff; border-color: #007bff; color: #fff; font-weight: 500; }
+.pagination .page-item.disabled .page-link { background: #fff; border-color: #dee2e6; color: #6c757d; cursor: not-allowed; }
+.pagination .page-item.disabled .page-link:hover { background: #fff; border-color: #dee2e6; color: #6c757d; }
+.pagination-info { color: #666; font-size: 14px; }
+.entries-selector { display: flex; align-items: center; gap: 8px; }
+.entries-selector select { border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 8px; font-size: 14px; }
+.pagination-container { display: flex; justify-content: center; }
+.file-result { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 12px; margin: 8px 0; transition: all 0.3s ease; }
+.file-result:hover { background: #e3f0ff; border-color: #4F8CFF; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(79, 140, 255, 0.15); }
+.file-icon { font-size: 1.5rem; margin-right: 8px; }
+.file-size { font-size: 0.8rem; color: #6c757d; background: #e9ecef; padding: 2px 6px; border-radius: 4px; }
+.upload-status { font-size: 0.7rem; padding: 4px 8px; border-radius: 12px; }
+.btn-upload-hasil { transition: all 0.3s ease; }
+.btn-upload-hasil:hover { transform: scale(1.05); }
+.upload-loading { animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+.btn-upload-hasil { transition: all 0.3s ease; border-width: 2px; }
+.btn-upload-hasil:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+.btn-outline-success:hover { background-color: #198754; border-color: #198754; color: white; }
+.btn-outline-primary:hover { background-color: #4F8CFF; border-color: #4F8CFF; color: white; }
+.btn-outline-danger:hover { background-color: #dc3545; border-color: #dc3545; color: white; }
+@media (max-width: 768px) { .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; } }
+.action-icon { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; min-width: 42px; min-height: 40px; border-radius: 12px; border: 2px solid transparent; background: #ffffff; color: #6c757d; text-decoration: none; transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; cursor: pointer; font-size: 1.05rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.action-icon:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.12); text-decoration: none; }
+.action-icon i { line-height: 1; }
+.view-icon { background: #eef5ff; color: #2f78ff; border-color: #cfe2ff; }
+.view-icon:hover { background: #2f78ff; color: #ffffff; border-color: #2f78ff; }
+.delete-icon { background: #fff0f1; color: #dc3545; border-color: #ffd6da; }
+.delete-icon:hover { background: #dc3545; color: #ffffff; border-color: #dc3545; }
+.upload-icon { background: #eaf7f0; color: #198754; border-color: #cfe9dc; }
+.upload-icon:hover { background: #198754; color: #ffffff; border-color: #198754; }
+.action-icon:focus { outline: none; box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.25); }
+.action-icon:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.upload-icon.uploading { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ====== CSS dari resources/views/slik/show.blade.php ====== */
+.section-card { border-radius: 18px; }
+.section-head { background: linear-gradient(90deg, #1dd1a1 0%, #49bbca 100%); border-radius: 18px 18px 0 0; color:#fff; }
+.section-head h5 { color:#fff !important; }
+.info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 768px) { .info-row { grid-template-columns: 1fr; } }
+.info-item { background:#fff; border:1px solid #eef2f7; border-radius:12px; padding:14px 16px; }
+.info-label { color:#6c757d; font-size:.85rem; margin-bottom:4px; }
+.info-value { font-weight:600; color:#162447; }
+.empty-drop { border:2px dashed #cfe2ff; background:#f7fbff; border-radius:14px; padding:28px; text-align:center; }
+.empty-drop .ico { font-size:2.25rem; color:#8fb3ff; }
+.file-card { border-radius:14px; border:1px solid #eef2f7; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.file-title { font-weight:600; }
+.status-badge { font-size: 0.9rem; padding:8px 16px; border-radius: 20px; }
+.avatar-circle { width:70px; height:70px; border-radius:50%; background:linear-gradient(135deg,#4F8CFF,#b2f2e5); color:#fff; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 2px 8px rgba(79,140,255,0.15); }

@@ -1,0 +1,166 @@
+/* Summernote Toolbar Fix - Additional CSS */
+/* File ini memastikan toolbar Summernote dapat digunakan dengan baik */
+
+/* Override any conflicting CSS */
+.note-editor .note-toolbar {
+    position: relative !important;
+    z-index: 1000 !important;
+    pointer-events: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.note-editor .note-toolbar .btn-group {
+    position: relative !important;
+    z-index: 1001 !important;
+    pointer-events: auto !important;
+    display: inline-block !important;
+}
+
+.note-editor .note-toolbar .btn {
+    position: relative !important;
+    z-index: 1002 !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+}
+
+.note-editor .note-toolbar .btn:hover {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .btn:active {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .btn:focus {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+/* Fix dropdown menus */
+.note-editor .note-toolbar .dropdown-menu {
+    z-index: 1050 !important;
+    pointer-events: auto !important;
+    position: absolute !important;
+    display: block !important;
+    visibility: visible !important;
+}
+
+.note-editor .note-toolbar .dropdown-menu .dropdown-item {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* Fix color picker */
+.note-editor .note-toolbar .note-color-palette {
+    z-index: 1050 !important;
+    pointer-events: auto !important;
+    position: absolute !important;
+}
+
+.note-editor .note-toolbar .note-color-palette .note-color-btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* Fix table picker */
+.note-editor .note-toolbar .note-table {
+    z-index: 1050 !important;
+    pointer-events: auto !important;
+    position: absolute !important;
+}
+
+.note-editor .note-toolbar .note-table .note-table-btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* Fix popover */
+.note-editor .note-toolbar .note-popover {
+    z-index: 1050 !important;
+    pointer-events: auto !important;
+    position: absolute !important;
+}
+
+.note-editor .note-toolbar .note-popover .note-popover-content {
+    pointer-events: auto !important;
+}
+
+.note-editor .note-toolbar .note-popover .note-popover-content .btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* Ensure no parent elements block interaction */
+.modal .note-editor .note-toolbar,
+.input-group .note-editor .note-toolbar,
+.form-group .note-editor .note-toolbar {
+    pointer-events: auto !important;
+    z-index: 1000 !important;
+}
+
+/* Fix for Bootstrap modal z-index conflicts */
+.modal.show .note-editor .note-toolbar {
+    z-index: 1055 !important;
+}
+
+.modal.show .note-editor .note-toolbar .dropdown-menu {
+    z-index: 1056 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-color-palette {
+    z-index: 1056 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-table {
+    z-index: 1056 !important;
+}
+
+.modal.show .note-editor .note-toolbar .note-popover {
+    z-index: 1056 !important;
+}
+
+/* Debug styles - remove in production */
+.note-editor .note-toolbar .btn[style*="pointer-events: none"] {
+    pointer-events: auto !important;
+    background-color: #ffeb3b !important;
+    border-color: #f57f17 !important;
+}
+
+.note-editor .note-toolbar .btn[style*="cursor: not-allowed"] {
+    cursor: pointer !important;
+    background-color: #ffeb3b !important;
+    border-color: #f57f17 !important;
+}
+
+/* Ensure toolbar is always visible and interactive */
+.note-editor .note-toolbar {
+    min-height: 40px !important;
+    background-color: #f8f9fa !important;
+    border-bottom: 1px solid #dee2e6 !important;
+}
+
+/* Fix for responsive issues */
+@media (max-width: 768px) {
+    .note-editor .note-toolbar {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        white-space: nowrap !important;
+    }
+    
+    .note-editor .note-toolbar .btn-group {
+        display: inline-block !important;
+        white-space: nowrap !important;
+    }
+}
