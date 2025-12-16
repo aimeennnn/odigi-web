@@ -107,7 +107,7 @@ class BankController extends BaseController
     {
         $request->validate([
             'files' => 'required|array',
-            'files.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'files.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
 
         try {
@@ -145,7 +145,7 @@ class BankController extends BaseController
             'nama_bank' => 'required|string|max:255',
             'no_rekening' => 'required|string|max:255',
             'files' => 'nullable|array',
-            'files.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'files.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'temp_paths' => 'nullable|array',
             'temp_paths.*' => 'nullable|string',
         ]);
@@ -261,7 +261,7 @@ class BankController extends BaseController
             'id_reg' => 'required|integer|exists:registers,id_reg',
             'nama_bank' => 'required|string|max:255',
             'nomor_rekening' => 'required|string|min:8|max:20',
-            'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             // hasil & status tidak wajib saat edit form, dikelola di modal upload aksi
         ]);
 
@@ -344,7 +344,7 @@ class BankController extends BaseController
     public function uploadHasil(Request $request, string $id)
     {
         $request->validate([
-            'hasil' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'hasil' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'temp_path' => 'nullable|string',
         ]);
 
@@ -392,7 +392,7 @@ class BankController extends BaseController
     public function uploadTempHasil(Request $request, string $id)
     {
         $request->validate([
-            'hasil' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
+            'hasil' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ]);
 
         try {
