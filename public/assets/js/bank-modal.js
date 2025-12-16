@@ -204,7 +204,7 @@
                     alert("Format tidak didukung");
                     return;
                 }
-                if (f.size > 2 * 1024 * 1024) {
+                if (f.size > 5 * 1024 * 1024) {
                     alert("Maks 2MB per file");
                     return;
                 }
