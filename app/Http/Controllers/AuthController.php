@@ -275,7 +275,7 @@ class AuthController extends Controller
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_CUSTOMREQUEST => 'POST',
                 CURLOPT_POSTFIELDS => [
-                    'appkey' => '3c2cbcbb-96aa-4297-b086-811e8ba84231',
+                    'appkey' => '60b2a927-61a1-4866-8294-9404256a8b4e',
                     'authkey' => 'TYpLzhxZV1SOn3Fko3PXgvGK0W6eu947Us71Z1srBRmOnZscZV',
                     'to' => $to,
                     'message' => $message,
