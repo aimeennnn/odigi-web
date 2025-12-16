@@ -73,7 +73,7 @@
                                 @error('file')
                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
-                                <small class="text-muted d-block mt-2">PDF, JPG, JPEG, PNG (maks. 2MB per file)</small>
+                                <small class="text-muted d-block mt-2">PDF, JPG, JPEG, PNG (maks. 5MB per file)</small>
                                 <div id="bankFileList" class="mt-3 d-flex flex-column gap-2"></div>
                                 <input type="hidden" name="temp_paths[]" id="bankTempPathsHolder">
                             </div>
