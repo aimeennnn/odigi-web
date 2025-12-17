@@ -7,6 +7,8 @@ use App\Models\Bank;
 use App\Models\Register;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Crypt;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Helpers\RoleHelper;
 
 class BankController extends BaseController
