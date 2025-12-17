@@ -137,63 +137,69 @@ class BankController extends BaseController
      */
     public function store(Request $request)
     {
-        // Double check menu access dan permission untuk create
         $accessCheck = $this->checkMenuAccess('menu_bank', 'create', $request);
-        if ($accessCheck) {
+        if($accessCheck){
             return $accessCheck;
         }
+
         $validated = $request->validate([
             'id_reg' => 'required|integer|exists:registers,id_reg',
-            'nama_bank' => 'required|string|max:255',
-            'no_rekening' => 'required|string|max:255',
+            'nama_bank' => 'required|string|max:225',
+            'no_rekening' => 'required|string|max:225',
             'files' => 'nullable|array',
-            'files.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'files.*' => 'nullable|files|mimes:pdf,jpg,jpeg,png|max:5120',
             'temp_paths' => 'nullable|array',
             'temp_paths.*' => 'nullable|string',
         ]);
 
-        // Handle file uploads
-        if ($request->filled('temp_paths')) {
-            // Move files from temporary storage to permanent storage
-            $tempPaths = array_filter($request->temp_paths ?? [], function ($p) {
-                return is_string($p) && $p !== '';
-            });
-            $filePaths = [];
+        $filePaths = [];
+        $hasilPaths = [];
 
-            foreach ($tempPaths as $tempPath) {
-                if (Storage::disk('public')->exists($tempPath)) {
-                    $newPath = str_replace('bank/tmp/', 'bank/files/', $tempPath);
+        if($request->filled('temp_paths')){
+            $tempPaths = array_filter($request->temp_paths ?? [], function ($p) {
+              return is_string($p) && $p !== '';  
+            });
+            foreach($tempPaths as $tempPath) {
+                if (Storage::disk('public')->exists($tempPath)){
+                    $newPath = str_replace('bank/tmp/', 'bank/files/', $newPath);
                     Storage::disk('public')->move($tempPath, $newPath);
                     $filePaths[] = $newPath;
                 }
             }
-
-            if (!empty($filePaths)) {
-                $validated['file'] = json_encode($filePaths);
+        }elseif ($request->hasFile('files')) {
+            foreach ( $request->file('files') as $file) {
+                $filePaths[] = $file->store('bank/files', 'public');
             }
-        } elseif ($request->hasFile('files')) {
-            // Direct file upload (fallback)
-            $filePaths = [];
-            foreach ($request->file('files') as $file) {
-                $filePath = $file->store('bank/files', 'public');
-                $filePaths[] = $filePath;
-            }
-            $validated['file'] = json_encode($filePaths);
         }
 
-        // Inisialisasi default untuk kolom hasil
-        $validated['hasil'] = null;
+        //proses ekstraksi python
+        foreach($filePaths as $path) {
+            $absolutePath = storage_path('app/public/' . $path);
 
-        // Kunci status pada tambah data bank
-        $validated['status'] = 'proses';
-        $validated['status'] = $this->mapStatus($validated['status']);
+            $csvResult = $this->processOcr($absolutePath);
+            if($csvResult){
+                $hasilPaths[] = $csvResult;
+            }
+        }
 
-        // Simpan nama user yang menginput
-        // $validated['input_by'] = auth()->user()->nama ?? auth()->user()->username ?? (string) auth()->id();
+        //menyimpan file ke database
+        if (!empty($filePaths)) {
+            $validated['file'] = json_encode($filePaths);
+        }else{
+            $validated['file'] = null;
+        }
+
+        if (!empty($hasilPaths)) {
+            $validated['hasil'] = json_encode($hasilPaths);
+            $validated['status'] = 'Valid';
+        }else {
+            $validated['hasil'] = null;
+            $validated['status'] = $this->mapStatus('proses');
+        }
 
         Bank::create($validated);
 
-        return redirect()->route('bank.index')->with('success', 'Data Bank berhasil ditambahkan!');
+        return redirect()->route('bank.index')->with('success', 'Data Bank Berhasil ditambahkan & diproses OCR!');
     }
 
     /**
