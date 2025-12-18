@@ -496,23 +496,31 @@ class BankController extends BaseController
     public function viewHasil(string $id)
     {
         $bank = Bank::findOrFail($id);
-        if (!$bank->hasil) {
-            abort(404);
-        }
+        if (!$bank->hasil) { abort(404); }
+        
         $path = $bank->hasil;
         $disk = Storage::disk('public');
-        if (!$disk->exists($path)) {
-            abort(404);
-        }
+        
+        if (!$disk->exists($path)) { abort(404); }
+        
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $filename = basename($path);
+        
         $mime = 'application/octet-stream';
+        
         if (in_array($ext, ['jpg','jpeg'])) { $mime = 'image/jpeg'; }
         elseif ($ext === 'png') { $mime = 'image/png'; }
         elseif ($ext === 'pdf') { $mime = 'application/pdf'; }
-        $filename = basename($path);
+        elseif ($ext === 'csv') { $mime = 'text/csv'; }
+        elseif ($ext === 'xlsx') { $mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; }
+        
         $stream = $disk->readStream($path);
+        
         if ($stream === false) { abort(404); }
-        return response()->stream(function () use ($stream) { fpassthru($stream); }, 200, [
+        
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+        }, 200, [
             'Content-Type' => $mime,
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
             'Cache-Control' => 'private, max-age=31536000',
@@ -538,63 +546,53 @@ class BankController extends BaseController
         return $map[strtolower($status)] ?? $status;
     }
 
-    /**
-     * FUNGSI KHUSUS: Menjalankan Python OCR
-     * Lokasi Script: root/python_scripts/ocr_processor.py
-     */
+    
     private function processOcr($pdfPath)
     {
-        // 1. Cek File PDF
         if (!file_exists($pdfPath)) {
             Log::warning("OCR Skipped: File PDF tidak ditemukan di $pdfPath");
             return null;
         }
 
-        // 2. Siapkan Output CSV
         $fileName = pathinfo($pdfPath, PATHINFO_FILENAME);
-        // Tambahkan timestamp agar unik
-        $csvName = $fileName . '_' . time() . '_hasil.csv';
         
-        // Folder tujuan: storage/app/public/bank/hasil_ocr
+           $xlsxName = $fileName . '_' . time() . '_hasil.xlsx';
+        
         $outputFolder = 'bank/hasil_ocr';
         Storage::disk('public')->makeDirectory($outputFolder);
         
-        $csvRelativePath = $outputFolder . '/' . $csvName;
-        // Gunakan helper Storage agar path-nya otomatis ikut settingan disk 'public' kamu
-        $csvAbsolutePath = Storage::disk('public')->path($csvRelativePath);
+        $xlsxRelativePath = $outputFolder . '/' . $xlsxName;
         
-        
-        // 3. Panggil Python Script
+        $xlsxAbsolutePath = Storage::disk('public')->path($xlsxRelativePath);
 
-        // PERHATIKAN: Path ini mengarah ke folder python_scripts yang baru kamu buat
-        $scriptPath = base_path('python_script/ocbc.py');
+        $scriptPath = base_path('python_script/ocbc.py'); 
 
         try {
-            // Command: python script.py [INPUT_PDF] [OUTPUT_CSV]
-            // Jika di server produksi pakai 'python3', ganti string 'python' di bawah
-            $process = new Process([
+                  $process = new Process([
                 'python', 
                 $scriptPath, 
                 $pdfPath, 
-                $csvAbsolutePath
+                $xlsxAbsolutePath
             ]);
             
-            $process->setTimeout(300); // 5 Menit (jaga-jaga file besar)
-            $process->mustRun(); // Eksekusi
+            $process->setTimeout(300); 
+            $process->mustRun(); 
 
-            // Cek Output dari Python
             $output = json_decode($process->getOutput(), true);
             
             if (isset($output['status']) && $output['status'] === 'success') {
-                Log::info("OCR Sukses! CSV tersimpan di: $csvRelativePath");
-                return $csvRelativePath; // Kembalikan path relative untuk DB
+                Log::info("OCR Sukses! Excel tersimpan di: $xlsxRelativePath");
+                return $xlsxRelativePath; 
             } else {
-                Log::error("OCR Error (Script): " . ($output['message'] ?? 'Unknown'));
+                Log::error("OCR Error (Script Output): " . ($output['message'] ?? 'Unknown'));
+                if ($process->getErrorOutput()) {
+                    Log::error("OCR Stderr: " . $process->getErrorOutput());
+                }
                 return null;
             }
 
         } catch (\Exception $e) {
-            Log::error("OCR Error (System): " . $e->getMessage());
+            Log::error("OCR Exception: " . $e->getMessage());
             return null;
         }
     }
