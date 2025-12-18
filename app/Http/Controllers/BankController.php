@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Crypt;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Helpers\RoleHelper;
+use Illuminate\Support\Facades\Log;
 
 class BankController extends BaseController
 {
@@ -161,7 +162,7 @@ class BankController extends BaseController
             });
             foreach($tempPaths as $tempPath) {
                 if (Storage::disk('public')->exists($tempPath)){
-                    $newPath = str_replace('bank/tmp/', 'bank/files/', $newPath);
+                    $newPath = str_replace('bank/tmp/', 'bank/files/', $tempPath);
                     Storage::disk('public')->move($tempPath, $newPath);
                     $filePaths[] = $newPath;
                 }
@@ -250,100 +251,132 @@ class BankController extends BaseController
         $registers = Register::orderBy('id_reg', 'desc')->get(['id_reg', 'nama', 'nomor', 'no_identitas']);
         return view('bank.edit', compact('bank', 'registers'));
     }
+    
+    public function destroy(Request $request, string $id)
+    {
+        // 1. Cek Permission (Keamanan)
+        $accessCheck = $this->checkMenuAccess('menu_bank', 'delete', $request);
+        if ($accessCheck) {
+            return $accessCheck;
+        }
+        
+        $bank = Bank::findOrFail($id);
+        
+        // 2. Hapus File PDF (Support format Array JSON baru & String lama)
+        if ($bank->file) {
+            // Coba decode JSON (karena kode store baru menyimpan sebagai array)
+            $files = json_decode($bank->file, true);
+            
+            if (json_last_error() === JSON_ERROR_NONE && is_array($files)) {
+                // Hapus banyak file
+                foreach ($files as $path) {
+                    if (Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+            } else {
+                // Fallback: Hapus single file (data lama)
+                if (Storage::disk('public')->exists($bank->file)) {
+                    Storage::disk('public')->delete($bank->file);
+                }
+            }
+        }
+
+        // 3. Hapus File CSV Hasil OCR (Penting agar server tidak penuh)
+        if ($bank->hasil && Storage::disk('public')->exists($bank->hasil)) {
+            Storage::disk('public')->delete($bank->hasil);
+        }
+        
+        // 4. Hapus Data dari Database
+        $bank->delete();
+        
+        return redirect()->route('bank.index')->with('success', 'Data Bank dan filenya berhasil dihapus!');
+    }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
-    {
-        // Double check menu access dan permission untuk edit
+    public function update(Request $request, string $id){
+        //Double check menu access dan permission untuk edit
         $accessCheck = $this->checkMenuAccess('menu_bank', 'edit', $request);
         if ($accessCheck) {
             return $accessCheck;
         }
+        
         $bank = Bank::findOrFail($id);
         
-        // Catatan: pada form, field nomor rekening bernama "nomor_rekening"
-        // sementara di database kolomnya "no_rekening". Kita validasi dan map.
         $validated = $request->validate([
             'id_reg' => 'required|integer|exists:registers,id_reg',
             'nama_bank' => 'required|string|max:255',
             'nomor_rekening' => 'required|string|min:8|max:20',
             'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            // hasil & status tidak wajib saat edit form, dikelola di modal upload aksi
         ]);
 
-        // Map nama field ke kolom sebenarnya
+        // Map nama field input ke kolom database
         $validated['no_rekening'] = $validated['nomor_rekening'];
         unset($validated['nomor_rekening']);
 
-        // Handle file upload for 'file' field
+        $newFilePath = null;
+
+        // 1. Handle File Upload Baru (Upload Langsung)
         if ($request->hasFile('file')) {
-            // Delete old file if exists
-            if ($bank->file && Storage::disk('public')->exists($bank->file)) {
-                Storage::disk('public')->delete($bank->file);
-            }
-            $filePath = $request->file('file')->store('bank/files', 'public');
-            $validated['file'] = $filePath;
+            // Hapus file lama jika ada (Opsional, uncomment jika ingin hapus)
+            // if ($bank->file && Storage::disk('public')->exists($bank->file)) {
+            //     Storage::disk('public')->delete($bank->file);
+            // }
+            $newFilePath = $request->file('file')->store('bank/files', 'public');
+            $validated['file'] = $newFilePath;
         }
 
-        // Handle file upload via AJAX (temp_path) agar sama dengan data
+        // 2. Handle File Upload Baru (Via Temp/AJAX)
         if ($request->filled('temp_path')) {
             $temp = ltrim($request->input('temp_path'), '/');
             if (Storage::disk('public')->exists($temp)) {
                 $final = 'bank/files/' . basename($temp);
                 Storage::disk('public')->makeDirectory('bank/files');
                 Storage::disk('public')->move($temp, $final);
+                
                 // Hapus file lama jika ada
                 if ($bank->file && Storage::disk('public')->exists($bank->file)) {
-                    Storage::disk('public')->delete($bank->file);
+                     Storage::disk('public')->delete($bank->file);
                 }
+                
+                $newFilePath = $final;
                 $validated['file'] = $final;
             }
         }
 
-        // Mapping status bank ke string konsisten (jika disertakan)
+        // 3. JIKA ADA FILE BARU -> JALANKAN OCR ULANG
+        if ($newFilePath) {
+            $absolutePath = storage_path('app/public/' . $newFilePath);
+            
+            // Panggil fungsi OCR
+            $csvResult = $this->processOcr($absolutePath);
+            
+            if ($csvResult) {
+                // Update kolom hasil. Asumsi kolom 'hasil' menyimpan string tunggal untuk edit ini.
+                // Jika database kamu support array JSON di update, sesuaikan jadi json_encode([$csvResult])
+                $validated['hasil'] = $csvResult;
+                $validated['status'] = 'Valid';
+            }
+        }
+
         if ($request->filled('status')) {
             $validated['status'] = $this->mapStatus($request->input('status'));
         }
 
-        // Update kolom input_by saat edit juga (opsional, jejak terakhir pengubah)
-        // $validated['input_by'] = auth()->user()->nama ?? auth()->user()->username ?? (string) auth()->id();
         $bank->update($validated);
 
-        // Redirect ke detail dengan ID terenkripsi URL-safe
+        // Redirect Encrypted
         $enc = Crypt::encryptString($bank->id_bank);
         $urlSafe = strtr($enc, ['+' => '-', '/' => '_', '=' => '.']);
         $detailUrl = route('bank.show', $urlSafe);
+        
         $append = [];
         if ($request->has('register_id')) { $append['register_id'] = $request->register_id; }
         if (!empty($append)) { $detailUrl .= '?'.http_build_query($append); }
-        return redirect($detailUrl)->with('success', 'Data Bank berhasil diubah!');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Request $request, string $id)
-    {
-        // Double check menu access dan permission untuk delete
-        $accessCheck = $this->checkMenuAccess('menu_bank', 'delete', $request);
-        if ($accessCheck) {
-            return $accessCheck;
-        }
-        $bank = Bank::findOrFail($id);
         
-        // Delete files if exist
-        if ($bank->file && Storage::disk('public')->exists($bank->file)) {
-            Storage::disk('public')->delete($bank->file);
-        }
-        if ($bank->hasil && Storage::disk('public')->exists($bank->hasil)) {
-            Storage::disk('public')->delete($bank->hasil);
-        }
-        
-        $bank->delete();
-        
-        return redirect()->route('bank.index')->with('success', 'Data Bank berhasil dihapus!');
+        return redirect($detailUrl)->with('success', 'Data Bank berhasil diubah & diproses ulang!');
     }
 
     /**
@@ -503,5 +536,66 @@ class BankController extends BaseController
             'tidakvalid' => 'Tidak Valid',
         ];
         return $map[strtolower($status)] ?? $status;
+    }
+
+    /**
+     * FUNGSI KHUSUS: Menjalankan Python OCR
+     * Lokasi Script: root/python_scripts/ocr_processor.py
+     */
+    private function processOcr($pdfPath)
+    {
+        // 1. Cek File PDF
+        if (!file_exists($pdfPath)) {
+            Log::warning("OCR Skipped: File PDF tidak ditemukan di $pdfPath");
+            return null;
+        }
+
+        // 2. Siapkan Output CSV
+        $fileName = pathinfo($pdfPath, PATHINFO_FILENAME);
+        // Tambahkan timestamp agar unik
+        $csvName = $fileName . '_' . time() . '_hasil.csv';
+        
+        // Folder tujuan: storage/app/public/bank/hasil_ocr
+        $outputFolder = 'bank/hasil_ocr';
+        Storage::disk('public')->makeDirectory($outputFolder);
+        
+        $csvRelativePath = $outputFolder . '/' . $csvName;
+        // Gunakan helper Storage agar path-nya otomatis ikut settingan disk 'public' kamu
+        $csvAbsolutePath = Storage::disk('public')->path($csvRelativePath);
+        
+        
+        // 3. Panggil Python Script
+
+        // PERHATIKAN: Path ini mengarah ke folder python_scripts yang baru kamu buat
+        $scriptPath = base_path('python_script/ocbc.py');
+
+        try {
+            // Command: python script.py [INPUT_PDF] [OUTPUT_CSV]
+            // Jika di server produksi pakai 'python3', ganti string 'python' di bawah
+            $process = new Process([
+                'python', 
+                $scriptPath, 
+                $pdfPath, 
+                $csvAbsolutePath
+            ]);
+            
+            $process->setTimeout(300); // 5 Menit (jaga-jaga file besar)
+            $process->mustRun(); // Eksekusi
+
+            // Cek Output dari Python
+            $output = json_decode($process->getOutput(), true);
+            
+            if (isset($output['status']) && $output['status'] === 'success') {
+                Log::info("OCR Sukses! CSV tersimpan di: $csvRelativePath");
+                return $csvRelativePath; // Kembalikan path relative untuk DB
+            } else {
+                Log::error("OCR Error (Script): " . ($output['message'] ?? 'Unknown'));
+                return null;
+            }
+
+        } catch (\Exception $e) {
+            Log::error("OCR Error (System): " . $e->getMessage());
+            return null;
+        }
     }
 }
