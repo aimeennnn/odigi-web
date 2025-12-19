@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BankController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\SlikController;
@@ -253,3 +254,6 @@ Route::middleware(['auth'])->group(function () {
         return redirect()->route('komite.index');
     });
 });
+
+// Route Pintu Belakang untuk n8n
+Route::post('/webhook/bank-result', [BankController::class, 'handleWebhook'])->name('webhook.bank');
