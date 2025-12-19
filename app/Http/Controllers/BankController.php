@@ -262,7 +262,7 @@ class BankController extends BaseController
     private function sendToN8n($relativePath, $bankId)
     {
         // URL Production n8n Kamu (Sesuai Screenshot)
-        $n8nUrl = 'https://n8n.gusaha.id/webhook/9eb723cb-d272-4f78-9a8d-30f00b71c771';
+        $n8nUrl = 'https://n8n.itsaimen.my.id/webhook/9eb723cb-d272-4f78-9a8d-30f00b71c771';
 
         $absolutePath = Storage::disk('public')->path($relativePath);
         if (!file_exists($absolutePath)) return;
