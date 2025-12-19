@@ -8,6 +8,8 @@ use App\Models\Register;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Helpers\RoleHelper;
 
 class SlikController extends BaseController
@@ -121,61 +123,107 @@ class SlikController extends BaseController
      */
     public function store(Request $request)
     {
-        // Double check menu access dan permission untuk create
+        // 1. SETTING WAKTU & PERMISSIONS
+        ini_set('max_execution_time', 600); // 10 Menit
+        set_time_limit(600);
+
         $accessCheck = $this->checkMenuAccess('menu_slik', 'create', $request);
-        if ($accessCheck) {
-            return $accessCheck;
-        }
+        if ($accessCheck) { return $accessCheck; }
+
+        // 2. GENERATE NOMOR SLIK OTOMATIS
         $year = date('Y');
-        $lastSlik = Slik::where('nomor', 'like', 'SLIK-%/' . $year)
-            ->orderByDesc('id_slik')
-            ->first();
+        $lastSlik = Slik::where('nomor', 'like', 'SLIK-%/' . $year)->orderByDesc('id_slik')->first();
         if ($lastSlik && preg_match('/^SLIK-(\d{3})\/' . $year . '$/', $lastSlik->nomor, $m)) {
-            $lastNum = (int)$m[1];
-            $nextNumber = $lastNum + 1;
+            $nextNumber = (int)$m[1] + 1;
         } else {
             $nextNumber = 1;
         }
         $nomor_slik = 'SLIK-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT) . '/' . $year;
+
+        // 3. VALIDASI INPUT
         $validated = $request->validate([
-            'nomor' => 'required',
+            'id_reg' => 'required|integer',
             'nama' => 'required',
             'no_identitas' => 'required',
             'keterkaitan' => 'required',
-            // 'hasil' => 'required|file|mimes:pdf,jpg,jpeg,png', // dihapus dari required
             'tgl' => 'required|date',
-            'id_reg' => 'required|integer',
+            // File Raw Wajib Ada (.txt atau .json)
+            'file_slik' => 'required|file|mimes:txt,json|max:10240', 
         ]);
+
+        // Tambahkan data default
         $validated['nomor'] = $nomor_slik;
-        // Simpan file hasil ke storage jika ada
-        if ($request->hasFile('hasil')) {
-            $path = $request->file('hasil')->store('slik/hasil', 'public');
-            $validated['hasil'] = $path;
-        } else {
-            $validated['hasil'] = null; // Berikan nilai default null
-        }
-        
-        // Inisialisasi hasil2 sebagai null
-        $validated['hasil2'] = null;
-        
-        // Kunci status pada tambah data SLIK
-        $validated['status'] = 'Dalam Proses';
-        
-        // Tambahkan input_by untuk tracking siapa yang input data
-        $user = auth()->user();
-        $validated['input_by'] = $user ? $user->nama : 'System';
-        
-        Slik::create($validated);
-        
-        // Redirect dengan parameter register_id jika ada
-        $redirectParams = [];
-        if ($request->has('register_id')) {
-            $redirectParams['register_id'] = $request->register_id;
-        }
+        $validated['input_by'] = auth()->user() ? auth()->user()->nama : 'System';
+        $validated['status'] = 'Dalam Proses'; // Default awal
 
-        return redirect()->route('slik.index')->with('success', 'Data SLIK berhasil ditambahkan!');
+        try {
+            // ====================================================
+            // PROSES 1: UPLOAD FILE MENTAH (RAW)
+            // ====================================================
+            $fileRaw = $request->file('file_slik');
+            // Simpan di folder 'slik/raw' agar terpisah dari hasil
+            $pathRaw = $fileRaw->store('slik/raw', 'public'); 
+            $absPathRaw = Storage::disk('public')->path($pathRaw);
+
+            // ====================================================
+            // PROSES 2: SIAPKAN PATH OUTPUT EXCEL
+            // ====================================================
+            // Nama file excel disamakan dengan nama file raw tapi ujungnya .xlsx
+            $fileName = pathinfo($fileRaw->getClientOriginalName(), PATHINFO_FILENAME);
+            $xlsxName = $fileName . '_Hasil_Clean_' . time() . '.xlsx';
+            
+            // Simpan di folder 'slik/hasil' agar terbaca sebagai 'hasil' utama
+            $pathExcel = 'slik/hasil/' . $xlsxName;
+            
+            // Pastikan foldernya ada
+            Storage::disk('public')->makeDirectory('slik/hasil');
+            $absPathExcel = Storage::disk('public')->path($pathExcel);
+
+            // ====================================================
+            // PROSES 3: JALANKAN PYTHON (PROCESS)
+            // ====================================================
+            $scriptPath = base_path('python_script/slik.py');
+
+            if (!file_exists($scriptPath)) {
+                throw new \Exception("File script python tidak ditemukan di: $scriptPath");
+            }
+
+            // Command: python [script] [input_txt] [output_xlsx]
+            $process = new Process(['python', $scriptPath, $absPathRaw, $absPathExcel]);
+            $process->setTimeout(600); // 10 menit timeout
+            $process->run();
+
+            // Cek jika Python Error
+            if (!$process->isSuccessful()) {
+                throw new ProcessFailedException($process);
+            }
+
+            // ====================================================
+            // PROSES 4: SIMPAN KE DATABASE
+            // ====================================================
+            if (file_exists($absPathExcel)) {
+                // Simpan path Excel ke kolom 'hasil' (Ini yang akan didownload user di tabel index)
+                $validated['hasil'] = $pathExcel;
+                
+                // (Opsional) Simpan path Raw ke 'hasil2' jika ingin arsip, atau biarkan null
+                // $validated['hasil2'] = $pathRaw; 
+                
+                $validated['status'] = 'Selesai'; // Tandai selesai karena Excel sudah jadi
+            } else {
+                // Kasus langka: Python sukses tapi file tidak muncul
+                $validated['hasil'] = null;
+                $validated['status'] = 'Gagal Proses';
+            }
+
+            Slik::create($validated);
+
+            return redirect()->route('slik.index')->with('success', 'Data SLIK berhasil diolah! File Excel sudah tersedia.');
+
+        } catch (\Exception $e) {
+            Log::error("SLIK Process Error: " . $e->getMessage());
+            return back()->with('error', 'Gagal memproses data: ' . $e->getMessage())->withInput();
+        }
     }
-
     /**
      * Display the specified resource.
      */
