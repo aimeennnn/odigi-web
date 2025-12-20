@@ -16,6 +16,13 @@ use App\Helpers\RoleHelper;
 class BankController extends BaseController
 {
     // --- INDEX ---
+     // (Fungsi show, edit, viewFile, uploadTemp lainnya tetap ada seperti biasa)
+    public function show(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.show', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'='])))]); }
+    public function edit(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.edit', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'=']))), 'registers' => Register::orderBy('id_reg', 'desc')->get()]); }
+    public function viewFile(string $id, ?int $index = 0) { /* ...Sama seperti sebelumnya... */ $bank = Bank::findOrFail($id); $path = json_decode($bank->file, true)[$index] ?? $bank->file; return response()->file(Storage::disk('public')->path($path)); }
+    public function uploadTempNew(Request $request) { /* ...Sama seperti sebelumnya... */ $tempPaths = []; foreach($request->file('files') as $file) $tempPaths[] = $file->store('bank/tmp', 'public'); return response()->json(['success'=>true, 'temp_paths'=>$tempPaths]); }
+
+
     public function index(Request $request)
     {
         $accessCheck = $this->checkMenuAccess('menu_bank', 'view', $request);
@@ -258,10 +265,10 @@ class BankController extends BaseController
         }
     }
 
-    // --- SEND TO N8N (PRODUCTION URL) ---
     private function sendToN8n($relativePath, $bankId)
     {
-        // URL Production n8n Kamu (Sesuai Screenshot)
+        // URL Webhook n8n (Start Node)
+        // Pastikan ini URL n8n yang baru (bukan webhook test)
         $n8nUrl = 'https://n8n.itsaimen.my.id/webhook/9eb723cb-d272-4f78-9a8d-30f00b71c771';
 
         $absolutePath = Storage::disk('public')->path($relativePath);
@@ -271,40 +278,33 @@ class BankController extends BaseController
             $fileStream = fopen($absolutePath, 'r');
             $fileName = basename($absolutePath);
 
-            // 1. Kirim File -> Tunggu Response JSON
-            $response = Http::withoutVerifying() // Anti SSL Error di Localhost
-                ->timeout(300) 
+            // === [PERUBAHAN UTAMA] ===
+            // Kita kirim 'id_bank' agar n8n tahu data punya siapa.
+            // Timeout pendek saja (30 detik), karena n8n cuma perlu jawab "Oke diterima".
+            
+            $response = Http::withoutVerifying()
+                ->timeout(30) 
                 ->attach('file', $fileStream, $fileName)
-                ->post($n8nUrl);
+                ->post($n8nUrl, [
+                    'id_bank' => $bankId  // <--- PENTING: Kirim ID ini!
+                ]);
 
             if ($response->successful()) {
-                $data = $response->json();
-
-                // 2. Ambil Link PDF dari n8n
-                if (isset($data['pdf_url'])) {
-                    $downloadUrl = $data['pdf_url'];
-                    
-                    // 3. Download File PDF-nya
-                    $pdfContent = Http::withoutVerifying()->get($downloadUrl)->body();
-
-                    if ($pdfContent) {
-                        // 4. Simpan PDF Final di Laptop
-                        $newFileName = 'n8n_result_' . time() . '.pdf';
-                        $newRelativePath = 'bank/hasil_n8n/' . $newFileName;
-                        Storage::disk('public')->put($newRelativePath, $pdfContent);
-                        
-                        // 5. Update Database dengan PDF Final
-                        $bank = Bank::find($bankId);
-                        if ($bank) {
-                            $bank->hasil = $newRelativePath; // Timpa path Excel dengan path PDF
-                            $bank->save();
-                            Log::info("Sukses! PDF n8n tersimpan: $newRelativePath");
-                        }
-                    }
+                Log::info("Berhasil kirim ke n8n untuk Bank ID: $bankId. Menunggu Webhook balik...");
+                
+                // Update status sementara biar user tahu proses berjalan
+                $bank = \App\Models\Bank::find($bankId);
+                if ($bank) {
+                    $bank->update(['status' => 'Sedang Diproses n8n']);
                 }
             } else {
                 Log::error("Gagal request n8n: " . $response->body());
             }
+
+            // === STOP DISINI ===
+            // Jangan ada kode download PDF atau save PDF disini!
+            // Biarkan fungsi handleWebhook() yang mengerjakannya nanti.
+
         } catch (\Exception $e) {
             Log::error("Exception n8n: " . $e->getMessage());
         }
@@ -325,9 +325,54 @@ class BankController extends BaseController
         }, 200, ['Content-Type' => $mime, 'Content-Disposition' => 'inline; filename="'.basename($path).'"']);
     }
     
-    // (Fungsi show, edit, viewFile, uploadTemp lainnya tetap ada seperti biasa)
-    public function show(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.show', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'='])))]); }
-    public function edit(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.edit', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'=']))), 'registers' => Register::orderBy('id_reg', 'desc')->get()]); }
-    public function viewFile(string $id, ?int $index = 0) { /* ...Sama seperti sebelumnya... */ $bank = Bank::findOrFail($id); $path = json_decode($bank->file, true)[$index] ?? $bank->file; return response()->file(Storage::disk('public')->path($path)); }
-    public function uploadTempNew(Request $request) { /* ...Sama seperti sebelumnya... */ $tempPaths = []; foreach($request->file('files') as $file) $tempPaths[] = $file->store('bank/tmp', 'public'); return response()->json(['success'=>true, 'temp_paths'=>$tempPaths]); }
+   
+
+
+    /**
+     * WEBHOOK HANDLE: Pintu Belakang untuk menerima hasil n8n
+     * n8n akan menembak URL ini saat dia selesai bekerja (Async).
+     */
+    public function handleWebhook(Request $request)
+    {
+        try {
+            // 1. Cek Kelengkapan Data dari n8n
+            // Kita butuh 'id_bank' (untuk tahu punya siapa) dan 'file_hasil' (PDF-nya)
+            if (!$request->has('id_bank') || !$request->hasFile('file_hasil')) {
+                return response()->json([
+                    'status' => 'error', 
+                    'message' => 'Parameter tidak lengkap (id_bank & file_hasil wajib ada)'
+                ], 400);
+            }
+
+            $id = $request->input('id_bank');
+            $file = $request->file('file_hasil');
+
+            // 2. Cari Data Bank di Database
+            // Pastikan modelnya sesuai: \App\Models\Bank
+            $bank = \App\Models\Bank::find($id);
+
+            if (!$bank) {
+                return response()->json(['status' => 'error', 'message' => 'Data Bank ID ' . $id . ' tidak ditemukan'], 404);
+            }
+
+            // 3. Simpan File PDF
+            // Simpan ke folder public/bank/hasil
+            $path = $file->store('bank/hasil', 'public');
+
+            // 4. Update Database
+            $bank->update([
+                'hasil'  => $path,       // Update kolom hasil dengan path baru
+                'status' => 'Selesai'    // Ubah status jadi Selesai
+            ]);
+
+            // 5. Beri Respon Sukses ke n8n
+            return response()->json(['status' => 'success', 'message' => 'Data Bank berhasil diupdate via Webhook']);
+
+        } catch (\Exception $e) {
+            // Catat error ke Log Laravel (storage/logs/laravel.log)
+            \Illuminate\Support\Facades\Log::error("Webhook Bank Error: " . $e->getMessage());
+            
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
 }
