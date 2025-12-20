@@ -311,7 +311,6 @@ try:
     print(json.dumps({"status": "success", "file": nama_file_excel}))
 
 except Exception as e:
-    # [FIX] Ganti Emoji ❌ dengan [ERROR]
     print(f"[ERROR] TERJADI ERROR: {e}")
     print(json.dumps({"status": "error", "message": str(e)}))
     sys.exit(1)

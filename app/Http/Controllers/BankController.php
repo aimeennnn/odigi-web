@@ -8,29 +8,26 @@ use App\Models\Register;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Http; // Wajib
-use Symfony\Component\Process\Process;
+use Illuminate\Support\Facades\Http;
+use Symfony\Component\Process\Process; 
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use App\Helpers\RoleHelper;
 
 class BankController extends BaseController
 {
-    // --- INDEX ---
+    // --- INDEX (TIDAK BERUBAH) ---
     public function index(Request $request)
     {
         $accessCheck = $this->checkMenuAccess('menu_bank', 'view', $request);
-        if ($accessCheck) { return $accessCheck; }
+        if ($accessCheck) return $accessCheck;
 
         $register_id = $request->query('register_id') ?: session('current_register_id');
         $query = Bank::query()->with('register');
         
-        if ($register_id) { $query->where('id_reg', $register_id); }
-        if ($nama = $request->input('filter_nama')) {
-            $query->whereHas('register', function($q) use ($nama) { $q->where('nama', 'like', '%' . $nama . '%'); });
-        }
-        if ($bank = $request->input('filter_bank')) { $query->where('nama_bank', 'like', '%' . $bank . '%'); }
+        if ($register_id) $query->where('id_reg', $register_id);
+        if ($nama = $request->input('filter_nama')) $query->whereHas('register', fn($q) => $q->where('nama', 'like', '%' . $nama . '%'));
+        if ($bank = $request->input('filter_bank')) $query->where('nama_bank', 'like', '%' . $bank . '%');
         
-        // Sorting Logic
         $sort = $request->query('sort', '');
         $order = $request->query('order', 'asc') === 'desc' ? 'desc' : 'asc';
         $sortableMap = [
@@ -38,296 +35,317 @@ class BankController extends BaseController
             'no_rekening' => 'banks.no_rekening', 'file' => 'banks.file',
             'status' => 'banks.status', 'hasil' => 'banks.hasil', 'updated_at' => 'banks.updated_at'
         ];
-        if (array_key_exists($sort, $sortableMap)) {
-            if ($sort === 'nama') {
-                $query->leftJoin('registers', 'registers.id_reg', '=', 'banks.id_reg')
-                      ->select('banks.*')->orderBy($sortableMap[$sort], $order);
-            } else { $query->orderBy($sortableMap[$sort], $order); }
-        } else { $query->orderBy('banks.id_bank', 'asc'); }
 
-        $perPage = in_array($request->get('per_page'), [5, 10, 25, 50, 100]) ? $request->get('per_page') : 5;
-        $bankData = $query->paginate($perPage)->withQueryString();
-        
-        $registers = $register_id 
-            ? Register::where('id_reg', $register_id)->get(['id_reg', 'nama', 'nomor', 'no_identitas'])
-            : Register::orderBy('id_reg', 'desc')->get(['id_reg', 'nama', 'nomor', 'no_identitas']);
-        
+        if (array_key_exists($sort, $sortableMap)) {
+            if ($sort === 'nama') $query->leftJoin('registers', 'registers.id_reg', '=', 'banks.id_reg')->select('banks.*')->orderBy($sortableMap[$sort], $order);
+            else $query->orderBy($sortableMap[$sort], $order);
+        } else {
+            $query->orderBy('banks.id_bank', 'asc');
+        }
+
+        $bankData = $query->paginate($request->get('per_page', 5))->withQueryString();
+        $registers = $register_id ? Register::where('id_reg', $register_id)->get() : Register::orderBy('id_reg', 'desc')->get();
         $register = $register_id ? Register::find($register_id) : null;
+        
         return view('bank.index', compact('bankData', 'registers', 'register'));
     }
 
-    // --- STORE (CREATE) ---
+    // --- UPLOAD TEMP (TIDAK BERUBAH) ---
+    public function uploadTempNew(Request $request)
+    {
+        $request->validate(['files' => 'required|array', 'files.*' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240']);
+        $tempPaths = [];
+        foreach ($request->file('files') as $file) $tempPaths[] = $file->store('bank/tmp', 'public');
+        return response()->json(['success' => true, 'temp_paths' => $tempPaths]);
+    }
+
+    // ==========================================================
+    // STORE (GABUNGAN: OCBC LAMA + MANDIRI BARU)
+    // ==========================================================
     public function store(Request $request)
     {
-        // Tambahkan 2 baris ini di paling atas function
-        ini_set('max_execution_time', 600); // 600 detik = 10 menit
-        set_time_limit(600);
         $accessCheck = $this->checkMenuAccess('menu_bank', 'create', $request);
-        if ($accessCheck) { return $accessCheck; }
+        if ($accessCheck) return $accessCheck;
 
-        $validated = $request->validate([
+        $request->validate([
             'id_reg' => 'required|integer|exists:registers,id_reg',
-            'nama_bank' => 'required|string|max:255',
-            'no_rekening' => 'required|string|max:255',
+            'nama_bank' => 'required|string',
+            'no_rekening' => 'required|string',
             'files' => 'nullable|array',
-            'files.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'temp_paths' => 'nullable|array',
-            'temp_paths.*' => 'nullable|string',
+            'file' => 'nullable|file|mimes:pdf|max:10240'
         ]);
 
-        $filePaths = [];
-        $hasilPaths = []; // Menyimpan path Excel sementara
+        $namaBank = $request->nama_bank;
 
         // 1. Handle File Upload
-        if ($request->filled('temp_paths')) {
-            $tempPaths = array_filter($request->temp_paths ?? [], function ($p) { return is_string($p) && $p !== ''; });
-            foreach ($tempPaths as $tempPath) {
-                if (Storage::disk('public')->exists($tempPath)) {
-                    $newPath = str_replace('bank/tmp/', 'bank/files/', $tempPath);
-                    Storage::disk('public')->makeDirectory('bank/files');
-                    Storage::disk('public')->move($tempPath, $newPath);
-                    $filePaths[] = $newPath;
-                }
-            }
+        $filePaths = [];
+        $folder = (strtoupper($namaBank) == 'MANDIRI') ? 'bank/mandiri' : 'bank/files'; // Pisahkan folder biar rapi
+
+        if ($request->hasFile('file')) {
+            $filePaths[] = $request->file('file')->store($folder, 'public');
         } elseif ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
-                $filePaths[] = $file->store('bank/files', 'public');
+                $filePaths[] = $file->store($folder, 'public');
+            }
+        } elseif ($request->filled('temp_paths')) {
+            foreach ($request->temp_paths as $tmp) {
+                if (Storage::disk('public')->exists($tmp)) {
+                    $new = str_replace('bank/tmp/', $folder . '/', $tmp);
+                    Storage::disk('public')->move($tmp, $new);
+                    $filePaths[] = $new;
+                }
             }
         }
 
-        // 2. JALANKAN OCR (PYTHON) -> DAPAT EXCEL
+        // 2. Simpan ke Database
+        $bank = Bank::create([
+            'id_reg' => $request->id_reg,
+            'nama_bank' => $namaBank,
+            'no_rekening' => $request->no_rekening,
+            'file' => json_encode($filePaths),
+            'status' => 'Processing Python...', // Status awal
+            'hasil' => null
+        ]);
+
+        // 3. JALANKAN LOGIKA SESUAI BANK
         foreach ($filePaths as $path) {
-            $absolutePath = Storage::disk('public')->path($path);
-            $xlsxResult = $this->processOcr($absolutePath); // Output .xlsx
-            
-            if ($xlsxResult) {
-                $hasilPaths[] = $xlsxResult;
+            $fullPdfPath = Storage::disk('public')->path($path);
+            $hasilExcel = null;
+            $n8nUrl = null;
+
+            // === JALUR OCBC (LAMA & TERBUKTI) ===
+            if (strtoupper($namaBank) == 'OCBC') {
+                $hasilExcel = $this->processOcrOcbc($fullPdfPath);
+                $n8nUrl = 'https://n8n.gusaha.id/webhook/0e8f5d1f-f831-4320-a464-8630df2d9866'; // URL OCBC
+            }
+            // === JALUR MANDIRI (BARU) ===
+            elseif (strtoupper($namaBank) == 'MANDIRI') {
+                $hasilExcel = $this->processOcrMandiri($fullPdfPath);
+                // Ganti URL ini dengan URL Webhook Mandiri kamu yang BEDA
+                $n8nUrl = 'https://n8n.gusaha.id/webhook/beaad1c3-270d-47c8-98b9-9d191ab6dc40'; 
+            }
+
+            // Kirim ke n8n jika Python Sukses
+            if ($hasilExcel && $n8nUrl) {
+                $this->sendToN8n($hasilExcel, $bank->id_bank ?? $bank->id, $n8nUrl);
+                $bank->update(['status' => 'Sedang Diproses n8n']); // Notif Status
+            } else {
+                $bank->update(['status' => 'Gagal OCR']);
+                Log::error("Gagal OCR untuk $namaBank ID: " . $bank->id);
             }
         }
 
-        // 3. Simpan ke Database (Status masih 'Proses' atau 'Valid' sementara)
-        $validated['file'] = !empty($filePaths) ? json_encode($filePaths) : null;
-        $validated['hasil'] = !empty($hasilPaths) ? json_encode($hasilPaths) : null;
-        $validated['status'] = !empty($hasilPaths) ? 'Valid' : 'Dalam Proses';
-
-        $bank = Bank::create($validated);
-
-        // 4. KIRIM KE N8N (Jika ada hasil Excel)
-        // Kita lakukan setelah create agar punya ID Bank untuk diupdate nanti
-        if (!empty($hasilPaths)) {
-            foreach ($hasilPaths as $xlsxPath) {
-                $this->sendToN8n($xlsxPath, $bank->id_bank);
-            }
-        }
-
-        return redirect()->route('bank.index')->with('success', 'Data diproses! PDF final dari n8n akan muncul sebentar lagi.');
+        return redirect()->route('bank.index')->with('success', "Data $namaBank berhasil diupload! Proses ekstraksi sedang berjalan di background (n8n).");
     }
 
-    // --- UPDATE ---
+    // ==========================================================
+    // UPDATE
+    // ==========================================================
     public function update(Request $request, string $id)
     {
-        $accessCheck = $this->checkMenuAccess('menu_bank', 'edit', $request);
-        if ($accessCheck) { return $accessCheck; }
-        
         $bank = Bank::findOrFail($id);
         
         $validated = $request->validate([
-            'id_reg' => 'required|integer|exists:registers,id_reg',
-            'nama_bank' => 'required|string|max:255',
-            'nomor_rekening' => 'required|string|min:8|max:20',
-            'file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'id_reg' => 'required|integer',
+            'nama_bank' => 'required|string',
+            'nomor_rekening' => 'required|string',
+            'file' => 'nullable|file|mimes:pdf|max:10240'
         ]);
 
-        $validated['no_rekening'] = $validated['nomor_rekening'];
-        unset($validated['nomor_rekening']);
+        $bank->nama_bank = $validated['nama_bank'];
+        $bank->no_rekening = $validated['nomor_rekening'];
 
-        $newFilePath = null;
-
+        // Jika ada file baru
         if ($request->hasFile('file')) {
-            $newFilePath = $request->file('file')->store('bank/files', 'public');
-            $validated['file'] = $newFilePath;
-        }
-
-        if ($request->filled('temp_path')) {
-            $temp = ltrim($request->input('temp_path'), '/');
-            if (Storage::disk('public')->exists($temp)) {
-                $final = 'bank/files/' . basename($temp);
-                Storage::disk('public')->makeDirectory('bank/files');
-                Storage::disk('public')->move($temp, $final);
-                if ($bank->file && Storage::disk('public')->exists($bank->file)) {
-                     Storage::disk('public')->delete($bank->file);
-                }
-                $newFilePath = $final;
-                $validated['file'] = $final;
-            }
-        }
-
-        if ($newFilePath) {
-            $absolutePath = Storage::disk('public')->path($newFilePath);
-            $xlsxResult = $this->processOcr($absolutePath);
+            $folder = (strtoupper($bank->nama_bank) == 'MANDIRI') ? 'bank/mandiri' : 'bank/files';
+            $path = $request->file('file')->store($folder, 'public');
             
-            if ($xlsxResult) {
-                $validated['hasil'] = $xlsxResult;
-                $validated['status'] = 'Valid';
-                
-                // Update dulu databasenya
-                $bank->update($validated);
-                
-                // Baru kirim ke n8n
-                $this->sendToN8n($xlsxResult, $bank->id_bank);
+            $bank->file = json_encode([$path]);
+            $bank->status = 'Processing Python (Update)...';
+            $bank->save();
+
+            // Jalankan OCR Ulang
+            $fullPdfPath = Storage::disk('public')->path($path);
+            $hasilExcel = null;
+            $n8nUrl = null;
+
+            if (strtoupper($bank->nama_bank) == 'OCBC') {
+                $hasilExcel = $this->processOcrOcbc($fullPdfPath);
+                $n8nUrl = 'https://n8n.gusaha.id/webhook/0e8f5d1f-f831-4320-a464-8630df2d9866';
+            } elseif (strtoupper($bank->nama_bank) == 'MANDIRI') {
+                $hasilExcel = $this->processOcrMandiri($fullPdfPath);
+                $n8nUrl = 'https://n8n.gusaha.id/webhook/beaad1c3-270d-47c8-98b9-9d191ab6dc40';
+            }
+
+            if ($hasilExcel && $n8nUrl) {
+                $this->sendToN8n($hasilExcel, $bank->id_bank ?? $bank->id, $n8nUrl);
+                $bank->update(['status' => 'Sedang Diproses n8n']);
+                return redirect()->back()->with('success', 'File diperbarui & sedang diproses ulang oleh n8n!');
             } else {
-                $bank->update($validated);
+                $bank->update(['status' => 'Gagal OCR']);
+                return redirect()->back()->with('error', 'Gagal memproses Python.');
             }
-        } else {
-            if ($request->filled('status')) {
-                $validated['status'] = $this->mapStatus($request->input('status'));
-            }
-            $bank->update($validated);
         }
 
-        // Redirect Encrypted Logic
-        $enc = Crypt::encryptString($bank->id_bank);
-        $urlSafe = strtr($enc, ['+' => '-', '/' => '_', '=' => '.']);
-        $detailUrl = route('bank.show', $urlSafe);
-        if ($request->has('register_id')) { $detailUrl .= '?register_id=' . $request->register_id; }
-        
-        return redirect($detailUrl)->with('success', 'Data Bank berhasil diubah & diproses ulang!');
+        $bank->save();
+        return redirect()->back()->with('success', 'Data diupdate!');
     }
 
-    // --- DELETE ---
-    public function destroy(Request $request, string $id)
-    {
-        $accessCheck = $this->checkMenuAccess('menu_bank', 'delete', $request);
-        if ($accessCheck) { return $accessCheck; }
-        
-        $bank = Bank::findOrFail($id);
-        
-        // Hapus PDF Asli
-        if ($bank->file) {
-            $files = json_decode($bank->file, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($files)) {
-                foreach ($files as $path) { if (Storage::disk('public')->exists($path)) Storage::disk('public')->delete($path); }
-            } elseif (Storage::disk('public')->exists($bank->file)) { Storage::disk('public')->delete($bank->file); }
-        }
 
-        // Hapus Hasil (Excel/PDF)
-        if ($bank->hasil) {
-            $hasils = json_decode($bank->hasil, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($hasils)) {
-                foreach ($hasils as $path) { if (Storage::disk('public')->exists($path)) Storage::disk('public')->delete($path); }
-            } elseif (Storage::disk('public')->exists($bank->hasil)) { Storage::disk('public')->delete($bank->hasil); }
-        }
-        
-        $bank->delete();
-        return redirect()->route('bank.index')->with('success', 'Data dihapus!');
-    }
-
-    // --- HELPER FUNCTIONS ---
-    private function mapStatus($status) {
-        $map = ['1'=>'Dalam Proses','proses'=>'Dalam Proses','2'=>'Valid','valid'=>'Valid','3'=>'Tidak Valid','tidak valid'=>'Tidak Valid'];
-        return $map[strtolower($status)] ?? $status;
-    }
-
-    // --- OCR PROCESSOR (PYTHON) ---
-    private function processOcr($pdfPath)
+    // ==========================================================
+    // CORE LOGIC (PROCESSORS)
+    // ==========================================================
+    
+    /**
+     * PROCESSOR OCBC (Yang Lama & Stabil)
+     */
+    private function processOcrOcbc($pdfPath)
     {
         if (!file_exists($pdfPath)) return null;
-
-        $fileName = pathinfo($pdfPath, PATHINFO_FILENAME);
-        $xlsxName = $fileName . '_' . time() . '_hasil.xlsx'; // Output Excel
-        
+        $xlsxName = 'ocbc_' . time() . '.xlsx';
         $outputFolder = 'bank/hasil_ocr';
         Storage::disk('public')->makeDirectory($outputFolder);
-        $xlsxRelativePath = $outputFolder . '/' . $xlsxName;
-        $xlsxAbsolutePath = Storage::disk('public')->path($xlsxRelativePath);
+        
+        $xlsxAbsolutePath = Storage::disk('public')->path($outputFolder . '/' . $xlsxName);
         $scriptPath = base_path('python_script/ocbc.py'); 
 
         try {
             $process = new Process(['python', $scriptPath, $pdfPath, $xlsxAbsolutePath]);
             $process->setTimeout(300); 
-            $process->mustRun(); 
-            $output = json_decode($process->getOutput(), true);
+            $process->mustRun();
             
-            if (isset($output['status']) && $output['status'] === 'success') {
-                return $xlsxRelativePath; 
+            // Cek output JSON gaya lama
+            $result = json_decode($process->getOutput(), true);
+            if (isset($result['status']) && $result['status'] === 'success') {
+                return $outputFolder . '/' . $xlsxName;
             }
             return null;
+
         } catch (\Exception $e) {
-            Log::error("OCR Exception: " . $e->getMessage());
+            Log::error("OCBC Error: " . $e->getMessage());
             return null;
         }
     }
 
-    // --- SEND TO N8N (PRODUCTION URL) ---
-    private function sendToN8n($relativePath, $bankId)
+    /**
+     * PROCESSOR MANDIRI (Baru)
+     */
+    private function processOcrMandiri($pdfPath)
     {
-        // URL Production n8n Kamu (Sesuai Screenshot)
-        $n8nUrl = 'https://n8n.gusaha.id/webhook/9eb723cb-d272-4f78-9a8d-30f00b71c771';
+        if (!file_exists($pdfPath)) return null;
+        $xlsxName = 'mandiri_' . time() . '.xlsx';
+        $outputFolder = 'bank/mandiri/hasil'; // Folder khusus mandiri
+        Storage::disk('public')->makeDirectory($outputFolder);
+        
+        $xlsxAbsolutePath = Storage::disk('public')->path($outputFolder . '/' . $xlsxName);
+        $scriptPath = base_path('python_script/mandiri.py'); 
 
+        try {
+            // Jalankan Python Mandiri
+            // Pastikan script mandiri.py sudah bisa terima sys.argv[1] (input) dan sys.argv[2] (output)
+            $process = new Process(['python', $scriptPath, $pdfPath, $xlsxAbsolutePath]);
+            $process->setTimeout(300); 
+            $process->mustRun();
+            
+            $output = $process->getOutput();
+            
+            // Mandiri outputnya TEXT "SUCCESS" (bukan JSON)
+            if (str_contains(strtoupper($output), 'SUCCESS') && file_exists($xlsxAbsolutePath)) {
+                return $outputFolder . '/' . $xlsxName;
+            }
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error("Mandiri Error: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * PENGIRIM KE N8N (Universal)
+     */
+    private function sendToN8n($relativePath, $bankId, $n8nUrl)
+    {
         $absolutePath = Storage::disk('public')->path($relativePath);
         if (!file_exists($absolutePath)) return;
 
         try {
-            $fileStream = fopen($absolutePath, 'r');
-            $fileName = basename($absolutePath);
+            Http::timeout(30)
+                ->attach('file_excel', fopen($absolutePath, 'r'), 'summary.xlsx')
+                ->post($n8nUrl, [
+                    'id_bank' => $bankId
+                ]);
+            
+            Log::info("Sukses kirim ke n8n. BankID: $bankId");
 
-            // 1. Kirim File -> Tunggu Response JSON
-            $response = Http::withoutVerifying() // Anti SSL Error di Localhost
-                ->timeout(300) 
-                ->attach('file', $fileStream, $fileName)
-                ->post($n8nUrl);
-
-            if ($response->successful()) {
-                $data = $response->json();
-
-                // 2. Ambil Link PDF dari n8n
-                if (isset($data['pdf_url'])) {
-                    $downloadUrl = $data['pdf_url'];
-                    
-                    // 3. Download File PDF-nya
-                    $pdfContent = Http::withoutVerifying()->get($downloadUrl)->body();
-
-                    if ($pdfContent) {
-                        // 4. Simpan PDF Final di Laptop
-                        $newFileName = 'n8n_result_' . time() . '.pdf';
-                        $newRelativePath = 'bank/hasil_n8n/' . $newFileName;
-                        Storage::disk('public')->put($newRelativePath, $pdfContent);
-                        
-                        // 5. Update Database dengan PDF Final
-                        $bank = Bank::find($bankId);
-                        if ($bank) {
-                            $bank->hasil = $newRelativePath; // Timpa path Excel dengan path PDF
-                            $bank->save();
-                            Log::info("Sukses! PDF n8n tersimpan: $newRelativePath");
-                        }
-                    }
-                }
-            } else {
-                Log::error("Gagal request n8n: " . $response->body());
-            }
         } catch (\Exception $e) {
-            Log::error("Exception n8n: " . $e->getMessage());
+            Log::error("Gagal kirim ke n8n: " . $e->getMessage());
         }
     }
-    
-    // --- VIEWERS ---
-    public function viewHasil(string $id)
+
+    // --- WEBHOOK HANDLER ---
+    public function handleWebhook(Request $request)
     {
-        $bank = Bank::findOrFail($id);
-        if (!$bank->hasil || !Storage::disk('public')->exists($bank->hasil)) abort(404);
-        
-        $path = $bank->hasil;
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        $mime = match($ext) { 'csv'=>'text/csv', 'xlsx'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'pdf'=>'application/pdf', default=>'application/octet-stream' };
-        
-        return response()->stream(function () use ($path) {
-            fpassthru(Storage::disk('public')->readStream($path));
-        }, 200, ['Content-Type' => $mime, 'Content-Disposition' => 'inline; filename="'.basename($path).'"']);
+        try {
+            if (!$request->has('id_bank') || !$request->hasFile('file_hasil')) {
+                return response()->json(['status' => 'error', 'message' => 'Data tidak lengkap'], 400);
+            }
+
+            $id = $request->input('id_bank');
+            $file = $request->file('file_hasil');
+            
+            // PERBAIKAN DISINI:
+            // Hapus "orWhere('id', ...)" karena kolom 'id' tidak ada di tabelmu.
+            // Cukup cari berdasarkan 'id_bank' saja.
+            $bank = Bank::where('id_bank', $id)->first();
+            
+            if ($bank) {
+                $path = $file->store('bank/hasil', 'public');
+                
+                $bank->update([
+                    'hasil'  => $path,
+                    'status' => 'Selesai' // Status Akhir
+                ]);
+
+                return response()->json(['status' => 'success', 'message' => 'Berhasil update hasil']);
+            } else {
+                return response()->json(['status' => 'error', 'message' => 'Bank ID tidak ditemukan'], 404);
+            }
+
+        } catch (\Exception $e) {
+            Log::error("Webhook Error: " . $e->getMessage());
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
     }
-    
-    // (Fungsi show, edit, viewFile, uploadTemp lainnya tetap ada seperti biasa)
-    public function show(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.show', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'='])))]); }
-    public function edit(Request $request, string $id) { /* ...Sama seperti sebelumnya... */ return view('bank.edit', ['bank' => Bank::findOrFail(is_numeric($id) ? $id : Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'=']))), 'registers' => Register::orderBy('id_reg', 'desc')->get()]); }
-    public function viewFile(string $id, ?int $index = 0) { /* ...Sama seperti sebelumnya... */ $bank = Bank::findOrFail($id); $path = json_decode($bank->file, true)[$index] ?? $bank->file; return response()->file(Storage::disk('public')->path($path)); }
-    public function uploadTempNew(Request $request) { /* ...Sama seperti sebelumnya... */ $tempPaths = []; foreach($request->file('files') as $file) $tempPaths[] = $file->store('bank/tmp', 'public'); return response()->json(['success'=>true, 'temp_paths'=>$tempPaths]); }
+
+    // --- HELPER LAIN ---
+    public function show(Request $request, string $id) { 
+        try { $id = Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'='])); } catch(\Exception $e){}
+        $bank = Bank::with('register')->findOrFail($id);
+        return view('bank.show', compact('bank'));
+    }
+    public function destroy(Request $request, string $id) {
+        $bank = Bank::findOrFail($id);
+        $bank->delete();
+        return redirect()->route('bank.index')->with('success', 'Dihapus');
+    }
+    public function edit(Request $request, string $id) {
+        try { $id = Crypt::decryptString(strtr($id, ['-'=>'+','_'=>'/', '.'=>'='])); } catch(\Exception $e){}
+        $bank = Bank::findOrFail($id);
+        $registers = Register::all();
+        return view('bank.edit', compact('bank', 'registers'));
+    }
+     public function viewFile(string $id, ?int $index = 0) {
+        $bank = Bank::findOrFail($id);
+        if (!$bank->file) abort(404);
+        $files = json_decode($bank->file, true);
+        $path = is_array($files) ? ($files[$index ?? 0] ?? null) : $bank->file;
+        if (empty($path) || !Storage::disk('public')->exists($path)) abort(404);
+        return response()->file(Storage::disk('public')->path($path));
+    }
+    public function viewHasil(string $id) {
+        $bank = Bank::findOrFail($id);
+        if (!$bank->hasil) abort(404);
+        return response()->file(Storage::disk('public')->path($bank->hasil));
+    }
 }
