@@ -69,6 +69,7 @@ Route::middleware(['auth', \App\Http\Middleware\CheckMenuAccess::class . ':menu_
     Route::resource('bank', App\Http\Controllers\BankController::class);
     Route::post('/bank/upload/{id}', [App\Http\Controllers\BankController::class, 'uploadHasil'])->name('bank.upload');
     Route::post('/bank/upload-temp/{id}', [App\Http\Controllers\BankController::class, 'uploadTempHasil'])->name('bank.upload.temp');
+    Route::get('/bank/check-status/{id}', [App\Http\Controllers\BankController::class, 'checkStatus'])->name('bank.check_status');
 });
 // Route data yang memerlukan login dan akses menu (dilindungi middleware auth + menu authorization)
 Route::middleware(['auth', \App\Http\Middleware\CheckMenuAccess::class . ':menu_data'])->group(function () {
