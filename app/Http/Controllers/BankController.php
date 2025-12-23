@@ -138,6 +138,30 @@ class BankController extends BaseController
         return redirect()->route('bank.index')->with('success', "Data $namaBank berhasil diupload! Proses ekstraksi sedang berjalan di background (n8n).");
     }
 
+       public function editSimple(Request $request)
+    {
+        // Ambil ID dari parameter ?id=...
+        $enc = (string) $request->query('id', '');
+        
+        if ($enc === '') {
+            abort(404);
+        }
+
+        try {
+            // Decrypt ID (Logic sama dengan edit biasa)
+            $decoded = strtr($enc, ['-' => '+', '_' => '/', '.' => '=']);
+            $realId = is_numeric($decoded) ? $decoded : Crypt::decryptString($decoded);
+        } catch (\Throwable $e) {
+            abort(404);
+        }
+
+        // Ambil Data
+        $bank = Bank::findOrFail($realId);
+        $registers = Register::orderBy('id_reg', 'desc')->get(['id_reg', 'nama', 'nomor', 'no_identitas']);
+        
+        return view('bank.edit', compact('bank', 'registers'));
+    }
+
     // ==========================================================
     // UPDATE
     // ==========================================================
@@ -316,6 +340,22 @@ class BankController extends BaseController
             Log::error("Webhook Error: " . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
+    }
+
+       public function checkStatus($id)
+    {
+        // PERBAIKAN: Hapus "orWhere('id'...)" karena tabelmu cuma punya 'id_bank'
+        // Kita cari spesifik pakai kolom id_bank saja
+        $bank = Bank::where('id_bank', $id)->first();
+        
+        if (!$bank) {
+            return response()->json(['status' => 'error', 'message' => 'Data bank tidak ditemukan'], 404);
+        }
+
+        return response()->json([
+            'status' => $bank->status,
+            'hasil' => $bank->hasil
+        ]);
     }
 
     // --- HELPER LAIN ---
